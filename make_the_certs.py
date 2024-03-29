@@ -4,6 +4,8 @@
 import os, sys, re
 import logging as L
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+import string
+from subprocess import run
 
 from pathlib import Path
 from odfdo import Document
@@ -28,7 +30,7 @@ def args_to_replacements(rep_list):
         if v.startswith("@"):
             # We are getting a list from a file
             with open(v[1:]) as vfh:
-                v = [l.rstrip("\n") for l in list(v) if l.strip()]
+                v = [l.rstrip("\n") for l in list(vfh) if l.strip()]
         else:
             v = [v]
         # We can set multiple values for the same key
@@ -71,7 +73,7 @@ def myformat(template, adict):
     sdict = { k: shellize(v)
               for k, v in adict.items() }
 
-    return template.format(sdict)
+    return template.format(**sdict)
 
 def shellize(insane):
     """Sanitizes a non-sane string so it can be a filename.
@@ -119,25 +121,46 @@ def main(args):
     # Generally only replacements['attendee'] would be a list but we'll
     # just support all possible combinations of all the replacements.
     for d in out_dirs:
-        L.info("Results will be saved to: {d}")
+        L.info(f"Results will be saved to: {d}")
 
-    for repdict in replacements:
+    # Save this for later
+    conversions = {}
+
+    for rep in replacements:
         # Load the template again!
         document = Document(args.template)
-        newname = File(myformat(args.outdir, rep)) / myformat(args.outfile, rep)
+        newname = Path(myformat(args.outdir, rep)) / myformat(args.outfile, rep)
 
         # Modify in place
-        search_replace(document, repdict)
+        search_replace(document, rep)
+
+        if newname.suffix == ".pdf":
+            conversions[newname] = newname.with_suffix(".odt")
+            newname = conversions[newname]
 
         print(f"Saving: {newname}")
         document.save(newname, pretty=False)
 
 
-    L.info("Saved out {len(replacements)} new files.")
+    L.info(f"Saved out {len(replacements)} new files.")
 
-    # TODO - convert to PDF afterwards
-    if args.outfile.endswith(".pdf"):
-        FIXME
+    # Now for the PDF conversions
+    for d in out_dirs:
+        all_v = [ v for k, v in conversions.items()
+                  if os.path.dirname(k) == d ]
+
+        # v is the source name (.odt) and we should be able to make
+        # all the PDFs at once.
+        run(["soffice", "--headless", "--convert-to", "pdf",
+             "--outdir", d,
+             *all_v ],
+            check = True, text=True, capture_output=True)
+
+        # If that worked we can remove the ODT files
+        for v in all_v:
+            os.unlink(v)
+
+    L.info(f"Converted {len(conversions)} files to PDF.")
 
 def parse_args(*argv):
     """Usual ArgumentParser
