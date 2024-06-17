@@ -42,6 +42,8 @@ Yeah that could be fun. But it falls down if we need to replace two items, like 
 Maybe NAME="@[0]foo.csv" INSTITUTE="@[1]foo.csv", or we could even imply that if the same file is
 referenced twice we are reading columns from it. But this starts to get complex to code. So yeah.
 
+See (making_labels.md)[making_labels.md].
+
 ## Original notes and approaches
 
 ### Editing PDF with Python

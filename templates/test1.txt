@@ -1,0 +1,11 @@
+Test for auto_cert_maker basic txt.
+
+#FOO# . #BAR#
+
+#BAZ-0#
+
+#BAZ-1#
+
+#BAZ-2#
+
+#FOO#
