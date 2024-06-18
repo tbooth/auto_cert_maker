@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-"""Make attendance certs for one of our courses.
+#!/usr/bin/env python3
+"""General purpose document formatter for ODT and TXT files.
 """
 import os, sys, re
 import logging as L
@@ -9,9 +9,6 @@ from subprocess import run
 
 from pathlib import Path
 from odfdo import Document
-
-IN = "form_test1.odt"
-OUT = "form_test1_replaced.odt"
 
 def args_to_replacements(*rep_list, col_sep=r"\t", base_dir="."):
     """We expect a list of strings in the form k=v or k=@v
@@ -61,7 +58,8 @@ def args_to_replacements(*rep_list, col_sep=r"\t", base_dir="."):
     return [r for r in res if r]
 
 def sort_outdirs(replacements, template, t2=None, extra=None, check=False, make=False):
-
+    """Make (or simply check) some directories for the outputs.
+    """
     out_dirs = set()
 
     for rep in replacements:
@@ -254,10 +252,44 @@ class TXTTemplate(BaseTemplate):
         with open(self._tfile) as fh:
             self._document = list(fh)
 
+def munge_replacements(reps_list, fields_spec):
+    """This function combines the rep_list (a list of {placeholder: x} dicts) with the fields_spec
+       to merge groups of compatible entries into a single page.
+    """
+    if not fields_spec['suffixes']:
+        # No combining to be done
+        return reps_list
+
+    # First we need to batch the reps_list based upon fields_spec['ns_fields']
+    # Things in the list can only go on the same page if all the values for these
+    # keys are identical.
+    batches = {}
+    for rep in reps_list:
+        batch_key = tuple(rep.get(k) for k in fields_spec['ns_fields'])
+        batches.setdefault(batch_key, []).append(rep)
+
+    # Now we can group the items in each batch based on fields_spec['suffixes']
+    res = []
+    sub_batch_size = len(fields_spec['suffixes'])
+    for batch in batches.values():
+        for sub_batch_n in range(len( batch[::sub_batch_size] )):
+            sub_batch = batch[sub_batch_n*sub_batch_size:(sub_batch_n+1)*sub_batch_size]
+
+            # One sub batch will now be an item in the result (ie. a page to format)
+            page = {k: sub_batch[0][k] for k in fields_spec['ns_fields']}
+            res.append(page)
+
+            for suf, rep in zip(fields_spec['suffixes'], sub_batch):
+                for k in fields_spec['s_fields']:
+                    page[k+suf] = rep[k]
+
+    return res
+
 def main(args):
     # Let's a-go!
     L.basicConfig(level = L.INFO)
 
+    # Load any lists of items to be inserted into placeholders
     replacements = args_to_replacements(*args.replacements)
 
     # Load the template
@@ -267,6 +299,10 @@ def main(args):
             break
     else:
         exit("No template handler for args.template")
+
+    # Now to support templates with multiple items per page:
+    replacements = munge_replacements( replacements,
+                                       document.get_fields(replacements[0].keys()) )
 
     # See about (and make) the output directories.
     rep_extra = document.formats
@@ -338,7 +374,8 @@ def parse_args(*argv):
                         help="Directory for results")
     parser.add_argument("-f", "--outfile", default="{_ALL_}.{_OFORMAT_}",
                         help="Out file name")
-    parser.add_argument("replacements", nargs="+")
+    parser.add_argument("replacements", nargs="+",
+                        help="Replacements as PLACEHOLDER=text or PLACEHOLDER=@file.tsv")
 
     args = parser.parse_args(*argv)
 
