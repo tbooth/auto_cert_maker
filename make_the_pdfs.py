@@ -205,6 +205,17 @@ class ODTTemplate(BaseTemplate):
             # replace a string in the full document
             body.replace(f"{m}{k}{m}", v)
 
+    def get_placeholders(self, ph):
+        """Given a single placeholder, return a list of all the times
+           the placeholder is found in the doc, in the form of a list of
+           suffix strings. Suffix may be empty.
+        """
+        body_text = self._document.body.text_content
+        m = re.escape(self._marker) # normally a '#'
+
+        return [ mo.group(1)
+                 for mo in re.finditer(f"{m}{ph}(-\d+)?{m}", body_text) ]
+
     def save(self, newname):
         self._document.save(newname, pretty=False)
 

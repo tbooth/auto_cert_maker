@@ -17,7 +17,7 @@ from make_the_pdfs import ODTTemplate, TXTTemplate
 class T(unittest.TestCase):
 
     def test_txt_basic(self):
-        l1 = TXTTemplate(os.path.join(DATA_DIR, "t_basic.csv"))
+        l1 = TXTTemplate(os.path.join(DATA_DIR, "t_basic.txt"))
 
         # l1.get_fields(name_list)
         # returns the non-suffix fields and the suffix fields and the suffixes.
@@ -49,6 +49,57 @@ class T(unittest.TestCase):
                                s_fields = [],
                                suffixes = [],
                                missing  = ["NOPE", "NYET"]) )
+
+    def test_txt_indexed(self):
+        l2 = TXTTemplate(os.path.join(DATA_DIR, "t_suffixed.txt"))
+
+        # FOO is not suffixed
+        self.assertEqual(l2.get_fields("FOO".split()),
+                         dict( ns_fields = ["FOO"],
+                               s_fields = [],
+                               suffixes = [],
+                               missing = [] ) )
+
+        # BAR is suffixed
+        self.assertEqual(l2.get_fields("BAR".split()),
+                         dict( ns_fields = [],
+                               s_fields = ["BAR"],
+                               suffixes = ["-1", "-2"],
+                               missing = [] ) )
+
+        # Get everything
+        self.assertEqual(l2.get_fields("FOO BAR BAZ MEEP NYET".split()),
+                         dict( ns_fields = ["FOO", "MEEP", "NYET"],
+                               s_fields = ["BAR", "BAZ"],
+                               suffixes = ["-1", "-2"],
+                               missing = ["NYET"] ) )
+
+    def test_odf_indexed(self):
+        """As above but with the .odt file
+        """
+        odtt = ODTTemplate(os.path.join(DATA_DIR, "t_suffixed.odt"))
+
+        # FOO is not suffixed
+        self.assertEqual(odtt.get_fields("FOO".split()),
+                         dict( ns_fields = ["FOO"],
+                               s_fields = [],
+                               suffixes = [],
+                               missing = [] ) )
+
+        # BAR is suffixed
+        self.assertEqual(odtt.get_fields("BAR".split()),
+                         dict( ns_fields = [],
+                               s_fields = ["BAR"],
+                               suffixes = ["-1", "-2"],
+                               missing = [] ) )
+
+        # Get everything
+        self.assertEqual(odtt.get_fields("FOO BAR BAZ MEEP NYET".split()),
+                         dict( ns_fields = ["FOO", "MEEP", "NYET"],
+                               s_fields = ["BAR", "BAZ"],
+                               suffixes = ["-1", "-2"],
+                               missing = ["NYET"] ) )
+
 
 if __name__ == '__main__':
     unittest.main()
