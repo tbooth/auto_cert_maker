@@ -13,30 +13,52 @@ from odfdo import Document
 IN = "form_test1.odt"
 OUT = "form_test1_replaced.odt"
 
-def args_to_replacements(*rep_list, base_dir="."):
+def args_to_replacements(*rep_list, col_sep=r"\t", base_dir="."):
     """We expect a list of strings in the form k=v or k=@v
     """
-    res = {}
+    # First construct a dict of { k: [*v] }, plus a dict of
+    # { filename: [*k] } to keep track of multi-column files.
+    res1 = {}
+    res2 = {}
     for k, v in (x.split("=", 1) for x in rep_list):
 
         if v.startswith("@"):
             # We are getting a list from a file
-            with open(os.path.join(base_dir, v[1:])) as vfh:
-                v = [l.rstrip("\n") for l in list(vfh) if l.strip()]
+            fn = v[1:]
+            res2.setdefault(fn, [])
+            col_num = len(res2[fn])
+            res2[fn].append(k)
+
+            with open(os.path.join(base_dir, fn)) as vfh:
+                v = [ re.split(col_sep, l.rstrip("\n"))[col_num]
+                      for l in vfh if l.strip() ]
         else:
             v = [v]
         # We can add multiple values for the same key
-        res.setdefault(k, []).extend(v)
+        res1.setdefault(k, []).extend(v)
 
-    # Now flip the dict into a list of all possible combinations.
-    res2 = [{}]
-    for k, v in res.items():
-        for rx in res2[:]:
-            for vx in v[1:]:
-                res2.append(dict(**rx, **{k: vx}))
-            rx.update(**{k: v[0]})
+    # Now flip the dict of lists into a list of all possible combinations.
+    # Strategy is to start with a single empty dict, then for each list v in
+    # res1.values() we take each existing entry in res and clone it to make
+    # len(v) copies. Then we put one of the values from v into each of those copies.
+    # Repeat until done.
+    # To account for multiple columns read from files, this is modified to loop through
+    # the values in res2 and only do the clone step once per list, so we don't end up
+    # with the product of all the columns.
+    res = [{}]
+    key_lists = [ [k] for k in res1 if not(any(k in v for v in res2.values())) ]
+    key_lists.extend(res2.values())
 
-    return [r for r in res2 if r]
+    for klist in key_lists:
+        for rx in res[:]:
+            dlist = [ {k: res1[k][n] for k in klist}
+                      for n in range(max(len(res1[k]) for k in klist)) ]
+
+            for dx in dlist[1:]:
+                res.append(dict(**rx, **dx))
+            rx.update(dlist[0])
+
+    return [r for r in res if r]
 
 def sort_outdirs(replacements, template, t2=None, extra=None, check=False, make=False):
 
@@ -104,38 +126,9 @@ def shellize(insane):
     # Then remove all "-" from start and finish
     return ''.join(s).strip('-')
 
-class ODTTemplate:
-    formats = dict(_OFORMAT_ = "pdf",
-                   _IFORMAT_ = "odt" )
-
-    def __init__(self, template_file, marker='#'):
-
-        self._tfile = template_file
-        self._marker = marker
-        self.reload()
-
-    @classmethod
-    def handles(cls, filename):
-        f = cls.formats['_IFORMAT_']
-        return filename.endswith(f".{f}")
-
-    def search_replace(self, repdict):
-        body = self._document.body
-        m = self._marker
-
-        for k, v in repdict.items():
-            # replace a string in the full document
-            body.replace(f"{m}{k}{m}", v)
-
-    def save(self, newname):
-        self._document.save(newname, pretty=False)
-
-    def reload(self):
-        self._document = Document(self._tfile)
-
-class TXTTemplate:
-    formats = dict( _OFORMAT_ = "txt",
-                    _IFORMAT_ = "txt" )
+class BaseTemplate:
+    formats = dict( _OFORMAT_ = None,
+                    _IFORMAT_ = None )
 
     def __init__(self, template_file, marker='#'):
         self._tfile = template_file
@@ -146,14 +139,6 @@ class TXTTemplate:
     def handles(cls, filename):
         f = cls.formats['_IFORMAT_']
         return filename.endswith(f".{f}")
-
-    def search_replace(self, repdict):
-        m = self._marker
-
-        for k, v in repdict.items():
-            for idx, l in enumerate(self._document):
-                # replace a string in the full document
-                self._document[idx] = l.replace(f"{m}{k}{m}", v)
 
     def get_fields(self, name_list):
         """Given a list of names to be replaced, see which are in the template
@@ -165,7 +150,6 @@ class TXTTemplate:
                  suffixes = [],
                  missing = [] )
         """
-        m = re.escape(self._marker) # normally a '#'
         res = dict( ns_fields = [],
                     s_fields = [],
                     suffixes = set(),
@@ -175,14 +159,13 @@ class TXTTemplate:
             found_ns = False
             found_s = set()
 
-            for l in self._document:
-                suffs = [mo.group(1) for mo in re.finditer(f"{m}{name}(-\d+)?{m}", l)]
-                for s in suffs:
-                    if s:
-                        found_s.add(s)
-                    else:
-                        # Basic placeholder
-                        found_ns = True
+            suffs = self.get_placeholders(name)
+            for s in suffs:
+                if s:
+                    found_s.add(s)
+                else:
+                    # Basic placeholder
+                    found_ns = True
 
             if found_ns and found_s:
                 # This is no good - can only be one or the other.
@@ -209,6 +192,47 @@ class TXTTemplate:
                                   key = lambda i: int(i.lstrip("-")) )
 
         return res
+
+class ODTTemplate(BaseTemplate):
+    formats = dict( _OFORMAT_ = "pdf",
+                    _IFORMAT_ = "odt" )
+
+    def search_replace(self, repdict):
+        body = self._document.body
+        m = self._marker
+
+        for k, v in repdict.items():
+            # replace a string in the full document
+            body.replace(f"{m}{k}{m}", v)
+
+    def save(self, newname):
+        self._document.save(newname, pretty=False)
+
+    def reload(self):
+        self._document = Document(self._tfile)
+
+class TXTTemplate(BaseTemplate):
+    formats = dict( _OFORMAT_ = "txt",
+                    _IFORMAT_ = "txt" )
+
+    def search_replace(self, repdict):
+        m = self._marker
+
+        for k, v in repdict.items():
+            for idx, l in enumerate(self._document):
+                # replace a string in the full document
+                self._document[idx] = l.replace(f"{m}{k}{m}", v)
+
+    def get_placeholders(self, ph):
+        """Given a single placeholder, return a list of all the times
+           the placeholder is found in the doc, in the form of a list of
+           suffix strings. Suffix may be empty
+        """
+        m = re.escape(self._marker) # normally a '#'
+
+        return [ mo.group(1)
+                 for l in self._document
+                 for mo in re.finditer(f"{m}{ph}(-\d+)?{m}", l) ]
 
     def save(self, newname):
         with open(newname, "w") as fh:
