@@ -108,4 +108,10 @@ Actually, this is not a sorting problem but a batching problem...
 OK, let us code. I'll use the above as test examples. I need a method for both templates that
 returns the non-suffix fields and the suffix fields and the suffixes. Maybe do that first.
 
+---
 
+I think I did it. Need to test on some combinations of things, and fix the filenames so that
+\_ALL\_ is resonable and also I can get the page number in the file name. And 'pdfunite' will
+allow me to concatenate the files if I desire.
+
+Cool. Will likely put this on public GitHub at some point.
