@@ -13,8 +13,7 @@ from odfdo import Document
 IN = "form_test1.odt"
 OUT = "form_test1_replaced.odt"
 
-
-def args_to_replacements(rep_list):
+def args_to_replacements(*rep_list, base_dir="."):
     """We expect a list of strings in the form k=v or k=@v
     """
     res = {}
@@ -22,11 +21,11 @@ def args_to_replacements(rep_list):
 
         if v.startswith("@"):
             # We are getting a list from a file
-            with open(v[1:]) as vfh:
+            with open(os.path.join(base_dir, v[1:])) as vfh:
                 v = [l.rstrip("\n") for l in list(vfh) if l.strip()]
         else:
             v = [v]
-        # We can set multiple values for the same key
+        # We can add multiple values for the same key
         res.setdefault(k, []).extend(v)
 
     # Now flip the dict into a list of all possible combinations.
@@ -34,7 +33,7 @@ def args_to_replacements(rep_list):
     for k, v in res.items():
         for rx in res2[:]:
             for vx in v[1:]:
-                res2.append(dict(**{k: vx}, **rx))
+                res2.append(dict(**rx, **{k: vx}))
             rx.update(**{k: v[0]})
 
     return [r for r in res2 if r]
@@ -135,8 +134,8 @@ class ODTTemplate:
         self._document = Document(self._tfile)
 
 class TXTTemplate:
-    formats = dict(_OFORMAT_ = "txt",
-                   _IFORMAT_ = "txt" )
+    formats = dict( _OFORMAT_ = "txt",
+                    _IFORMAT_ = "txt" )
 
     def __init__(self, template_file, marker='#'):
         self._tfile = template_file
@@ -156,6 +155,61 @@ class TXTTemplate:
                 # replace a string in the full document
                 self._document[idx] = l.replace(f"{m}{k}{m}", v)
 
+    def get_fields(self, name_list):
+        """Given a list of names to be replaced, see which are in the template
+           and which are suffixed. Check for suffix consistency. Returns a dict
+           where all values are lists.
+
+           dict( ns_fields = [],
+                 s_fields = [],
+                 suffixes = [],
+                 missing = [] )
+        """
+        m = re.escape(self._marker) # normally a '#'
+        res = dict( ns_fields = [],
+                    s_fields = [],
+                    suffixes = set(),
+                    missing = [] )
+
+        for name in name_list:
+            found_ns = False
+            found_s = set()
+
+            for l in self._document:
+                suffs = [mo.group(1) for mo in re.finditer(f"{m}{name}(-\d+)?{m}", l)]
+                for s in suffs:
+                    if s:
+                        found_s.add(s)
+                    else:
+                        # Basic placeholder
+                        found_ns = True
+
+            if found_ns and found_s:
+                # This is no good - can only be one or the other.
+                raise RuntimeError(f"Field {name} is in template with and without suffixes.")
+
+            if res['suffixes'] and found_s and (found_s != res['suffixes']):
+                # There is a conflict
+                raise RuntimeError(f"Inconsistent field suffixes in template.")
+
+            # Add this info to the aggregate data structure
+            if found_ns:
+                res['ns_fields'].append(name)
+            elif found_s:
+                res['s_fields'].append(name)
+            else:
+                # Missing things go on ns_fields and missing
+                res['ns_fields'].append(name)
+                res['missing'].append(name)
+
+            res['suffixes'] = res['suffixes'] or found_s
+
+        # Finally, transform the suffixes into a list, numerically sorted.
+        res['suffixes'] = sorted( res['suffixes'],
+                                  key = lambda i: int(i.lstrip("-")) )
+
+        return res
+
     def save(self, newname):
         with open(newname, "w") as fh:
             for l in self._document:
@@ -169,7 +223,7 @@ def main(args):
     # Let's a-go!
     L.basicConfig(level = L.INFO)
 
-    replacements = args_to_replacements(args.replacements)
+    replacements = args_to_replacements(*args.replacements)
 
     # Load the template
     for ttype in (ODTTemplate, TXTTemplate):
