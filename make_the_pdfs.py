@@ -57,18 +57,18 @@ def args_to_replacements(*rep_list, col_sep=r"\t", base_dir="."):
 
     return [r for r in res if r]
 
-def sort_outdirs(replacements, template, t2=None, extra=None, check=False, make=False):
+def sort_outdirs(replacements, template, t2=None, check=False, make=False):
     """Make (or simply check) some directories for the outputs.
     """
     out_dirs = set()
 
     for rep in replacements:
 
-        out_dirs.add(myformat(template, rep, extra=extra))
+        out_dirs.add(myformat(template, rep))
 
         # If t2, we just want to check it formats OK.
         if t2:
-            L.debug(f"Output file -- " + myformat(t2, rep, extra=extra))
+            L.debug(f"Output file -- " + myformat(t2, rep))
 
     out_dirs = sorted(out_dirs)
     for od in out_dirs:
@@ -80,17 +80,11 @@ def sort_outdirs(replacements, template, t2=None, extra=None, check=False, make=
 
     return out_dirs
 
-def myformat(template, adict, extra=None):
+def myformat(template, adict):
     """Format that removes any funny characters from the dict
     """
     sdict = { k: shellize(v)
               for k, v in adict.items() }
-
-    # Add an _ALL_ item which has everything
-    sdict['_ALL_'] = "_".join([ sdict[k] for k in sorted(sdict) ])
-
-    # Now add the file format, or whatever.
-    sdict.update(extra or ())
 
     return template.format(**sdict)
 
@@ -191,6 +185,13 @@ class BaseTemplate:
 
         return res
 
+    def combine(self, in_list, out_file):
+        """Combine a bunch of TXT files
+        """
+        with open(out_file, "wb") as ofh:
+            run(["head", "-n-0", *in_list],
+                check=True, stdout=ofh)
+
 class ODTTemplate(BaseTemplate):
     formats = dict( _OFORMAT_ = "pdf",
                     _IFORMAT_ = "odt" )
@@ -219,6 +220,12 @@ class ODTTemplate(BaseTemplate):
 
     def reload(self):
         self._document = Document(self._tfile)
+
+    def combine(self, in_list, out_file):
+        """Combine a bunch of PDF files
+        """
+        run(["pdfunite", *in_list, out_file],
+            check=True, text=True, capture_output=True)
 
 class TXTTemplate(BaseTemplate):
     formats = dict( _OFORMAT_ = "txt",
@@ -285,6 +292,34 @@ def munge_replacements(reps_list, fields_spec):
 
     return res
 
+def re_munge_replacements(replacements, fields_spec, extra):
+    """This takes the replacements list and makes a related list that is used for
+       making file and directory names.
+    """
+    res = []
+
+    for page, rep in enumerate(replacements):
+        rep = rep.copy()
+
+        # Remove all the s_fields and replace them with a batch suffix
+        for s_field in fields_spec['s_fields']:
+            for suf in fields_spec['suffixes']:
+                if f"{s_field}{suf}" in rep:
+                    rep[s_field] = f"page{page}"
+                    del rep[f"{s_field}{suf}"]
+
+        # Add an _ALL_ item which has everything
+        rep['_ALL_'] = "_".join([f"page{page}"] +
+                                [ rep[k] for k in sorted(rep)
+                                  if k not in fields_spec['s_fields'] ])
+
+        # Add in the _OFORMAT_ and _IFORMAT_ (or whatever)
+        rep.update(extra or ())
+
+        res.append(rep)
+
+    return res
+
 def main(args):
     # Let's a-go!
     L.basicConfig(level = L.INFO)
@@ -301,15 +336,17 @@ def main(args):
         exit("No template handler for args.template")
 
     # Now to support templates with multiple items per page:
-    replacements = munge_replacements( replacements,
-                                       document.get_fields(replacements[0].keys()) )
+    fields = document.get_fields(replacements[0].keys())
+    replacements = munge_replacements( replacements, fields )
+
+    # We need a version of the replacements that has the _ALL_ and _IFORMAT_ and _OFORMAT_
+    # replaced with things that can go in a file name.
+    replacements2 = re_munge_replacements( replacements, fields, document.formats )
 
     # See about (and make) the output directories.
-    rep_extra = document.formats
-    out_dirs = sort_outdirs( replacements, args.outdir, t2 = args.outfile,
-                                                        extra = rep_extra,
-                                                        check = True,
-                                                        make = True )
+    out_dirs = sort_outdirs( replacements2, args.outdir, t2 = args.outfile,
+                                                         check = not args.clobber,
+                                                         make = True )
 
     # Generally only replacements['attendee'] would be a list but we'll
     # just support all possible combinations of all the replacements.
@@ -320,11 +357,11 @@ def main(args):
     conversions = {}
 
     # Loop through all the output docs to be made
-    for rep in replacements:
+    for rep, rep2 in zip(replacements, replacements2):
         # Load the template again!
         document.reload()
-        newname = ( Path(myformat(args.outdir, rep, rep_extra)) /
-                    myformat(args.outfile, rep, rep_extra) )
+        newname = ( Path(myformat(args.outdir, rep2)) /
+                    myformat(args.outfile, rep2) )
 
         # Modify in place
         document.search_replace(rep)
@@ -360,6 +397,12 @@ def main(args):
 
         L.info(f"Converted {len(conversions)} files to {document.formats['_OFORMAT_'].upper()}.")
 
+    # And finally the combining step
+    if args.combine:
+        document.combine(conversions, args.combine)
+
+        L.info(f"Created combined output in file: {args.combine}")
+
 def parse_args(*argv):
     """Usual ArgumentParser
     """
@@ -374,6 +417,10 @@ def parse_args(*argv):
                         help="Directory for results")
     parser.add_argument("-f", "--outfile", default="{_ALL_}.{_OFORMAT_}",
                         help="Out file name")
+    parser.add_argument("--clobber", action="store_true",
+                        help="Overwrite files in existing directory")
+    parser.add_argument("-c", "--combine",
+                        help="Make a combined file with this name")
     parser.add_argument("replacements", nargs="+",
                         help="Replacements as PLACEHOLDER=text or PLACEHOLDER=@file.tsv")
 
