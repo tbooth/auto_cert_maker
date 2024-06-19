@@ -272,8 +272,8 @@ def munge_replacements(reps_list, fields_spec):
     res = []
     sub_batch_size = len(fields_spec['suffixes'])
     for batch in batches.values():
-        for sub_batch_n in range(len( batch[::sub_batch_size] )):
-            sub_batch = batch[sub_batch_n*sub_batch_size:(sub_batch_n+1)*sub_batch_size]
+        for sub_batch_n in range(0, len(batch), sub_batch_size):
+            sub_batch = batch[sub_batch_n:(sub_batch_n+sub_batch_size)]
 
             # One sub batch will now be an item in the result (ie. a page to format)
             page = {k: sub_batch[0][k] for k in fields_spec['ns_fields']}
