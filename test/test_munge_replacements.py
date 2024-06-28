@@ -28,7 +28,7 @@ class T(unittest.TestCase):
                         s_fields = [],
                         suffixes = [],
                         missing = [] )
-        reps = [ {'FOO': 'x'} ]
+        reps = [ {'FOO': 'x', '_PAGE_': '1'} ]
 
         res = munge_replacements(reps, fields)
 
@@ -46,7 +46,7 @@ class T(unittest.TestCase):
 
         res = munge_replacements(reps, fields)
 
-        self.assertEqual(res, [{'FOO-0': 'x'}])
+        self.assertEqual(res, [{'FOO-0': 'x', '_PAGE_': '1'}])
 
     def text_suff_2(self):
         """This is more like it
@@ -59,8 +59,8 @@ class T(unittest.TestCase):
 
         res = munge_replacements(reps, fields)
 
-        self.assertEqual(res, [{'FOO-0': 'x', 'FOO-1': 'y', 'FOO-2': 'z'},
-                               {'FOO-0': 'odd'}])
+        self.assertEqual(res, [{'FOO-0': 'x', 'FOO-1': 'y', 'FOO-2': 'z', '_PAGE_': '1'},
+                               {'FOO-0': 'odd', '_PAGE_': '2'}])
 
     def test_suff_all(self):
         """This has it all going on.
@@ -82,16 +82,16 @@ class T(unittest.TestCase):
                  {'FOO': 'a', 'BAR': '5', 'BAZ': '_5', 'MEEP': 'meep2'} ]
 
         # The munger should be able to come up with:
-        desired = [ {'FOO': 'a', 'BAR-1': '0', 'BAZ-1': '_0',
-                                 'BAR-2': '1', 'BAZ-2': '_1', 'MEEP': 'meep1'},
-                    {'FOO': 'a', 'BAR-1': '2', 'BAZ-1': '_2',
-                                 'BAR-2': '4', 'BAZ-2': '_4', 'MEEP': 'meep1'},
-                    {'FOO': 'a', 'BAR-1': '0', 'BAZ-1': '_0',
-                                 'BAR-2': '3', 'BAZ-2': '_3', 'MEEP': 'meep2'},
-                    {'FOO': 'a', 'BAR-1': '5',
-                                 'BAZ-1': '_5', 'MEEP': 'meep2'},
-                    {'FOO': 'a', 'BAR-1': '1',
-                                 'BAZ-1': '_1', 'MEEP': 'meep3'}, ]
+        desired = [ {'FOO': 'a',    'BAR-1': '0', 'BAZ-1': '_0',
+                     '_PAGE_': '1', 'BAR-2': '1', 'BAZ-2': '_1', 'MEEP': 'meep1'},
+                    {'FOO': 'a',    'BAR-1': '2', 'BAZ-1': '_2',
+                     '_PAGE_': '2', 'BAR-2': '4', 'BAZ-2': '_4', 'MEEP': 'meep1'},
+                    {'FOO':'a',     'BAR-1': '0', 'BAZ-1': '_0',
+                     '_PAGE_': '3', 'BAR-2': '3', 'BAZ-2': '_3', 'MEEP': 'meep2'},
+                    {'FOO': 'a',    'BAR-1': '5',
+                     '_PAGE_': '4', 'BAZ-1': '_5', 'MEEP': 'meep2'},
+                    {'FOO': 'a',    'BAR-1': '1',
+                     '_PAGE_': '5', 'BAZ-1': '_1', 'MEEP': 'meep3'}, ]
 
         res = munge_replacements(reps, fields)
         self.assertEqual(res, desired)

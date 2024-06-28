@@ -264,8 +264,8 @@ def munge_replacements(reps_list, fields_spec):
        to merge groups of compatible entries into a single page.
     """
     if not fields_spec['suffixes']:
-        # No combining to be done
-        return reps_list
+        # No combining to be done. Just add _PAGE_ markers.
+        return [ {**rep, '_PAGE_': str(n+1)} for n, rep in enumerate(reps_list) ]
 
     # First we need to batch the reps_list based upon fields_spec['ns_fields']
     # Things in the list can only go on the same page if all the values for these
@@ -285,6 +285,7 @@ def munge_replacements(reps_list, fields_spec):
             # One sub batch will now be an item in the result (ie. a page to format)
             page = {k: sub_batch[0][k] for k in fields_spec['ns_fields']}
             res.append(page)
+            page['_PAGE_'] = str(len(res)) # Pages start from 1
 
             for suf, rep in zip(fields_spec['suffixes'], sub_batch):
                 for k in fields_spec['s_fields']:
@@ -298,20 +299,21 @@ def re_munge_replacements(replacements, fields_spec, extra):
     """
     res = []
 
-    for page, rep in enumerate(replacements):
+    for rep in replacements:
         rep = rep.copy()
 
         # Remove all the s_fields and replace them with a batch suffix
         for s_field in fields_spec['s_fields']:
             for suf in fields_spec['suffixes']:
                 if f"{s_field}{suf}" in rep:
-                    rep[s_field] = f"page{page}"
+                    rep[s_field] = f"page{rep['_PAGE_']}"
                     del rep[f"{s_field}{suf}"]
 
         # Add an _ALL_ item which has everything
-        rep['_ALL_'] = "_".join([f"page{page}"] +
+        rep['_ALL_'] = "_".join([f"page{rep['_PAGE_']}"] +
                                 [ rep[k] for k in sorted(rep)
-                                  if k not in fields_spec['s_fields'] ])
+                                  if k not in fields_spec['s_fields']
+                                  and k != "_PAGE_" ])
 
         # Add in the _OFORMAT_ and _IFORMAT_ (or whatever)
         rep.update(extra or ())
