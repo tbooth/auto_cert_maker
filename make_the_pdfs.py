@@ -213,7 +213,7 @@ class ODTTemplate(BaseTemplate):
         m = re.escape(self._marker) # normally a '#'
 
         return [ mo.group(1)
-                 for mo in re.finditer(f"{m}{ph}(-\d+)?{m}", body_text) ]
+                 for mo in re.finditer(rf"{m}{ph}(-\d+)?{m}", body_text) ]
 
     def save(self, newname):
         self._document.save(newname, pretty=False)
@@ -248,7 +248,7 @@ class TXTTemplate(BaseTemplate):
 
         return [ mo.group(1)
                  for l in self._document
-                 for mo in re.finditer(f"{m}{ph}(-\d+)?{m}", l) ]
+                 for mo in re.finditer(rf"{m}{ph}(-\d+)?{m}", l) ]
 
     def save(self, newname):
         with open(newname, "w") as fh:
