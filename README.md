@@ -20,29 +20,35 @@ $ python3 make_the_certs.py COURSE="Linux for Genomics" ATTENDEE="@attendees/nam
 You will want to replace all the placeholders in the template with something or else the
 placeholders will just be left there.
 
-## Making labels etc?
+## Making labels etc
 
-The current version replaces all the instances of a given placeholder in a document, then converts
+The original version replaces all the instances of a given placeholder in a document, then converts
 that document to PDF. It just repeats this for every combination of placeholders (normally you
-will only have one which is a list and the rest are fixed).
+will only have one which is a list - eg. the names to go on the certificates - and the rest are
+single fixed values).
 
-This is no good for a sheet of labels or badges, but I could extend it to work with labels. My
+This is no good for a sheet of labels or badges, so I extended it to work with labels. My
 idea is:
 
-1. Instead of #PLACEHOLDER# use #PLACEHOLDER-0#, #PLACEHOLDER-1# etc.
-2. If such replacements are made, these will consume items from the list (rather than just
+1. In the template, instead of #PLACEHOLDER# use #PLACEHOLDER-0#, #PLACEHOLDER-1# etc.
+2. If such placeholders are found, these will consume items from the list (rather than just
    replacing all occurrences in the doc with the same item).
 3. In this case, the output file names will contain "batch{b}\_{n}" where `b` is the batch size
    and n is the doc number.
 4. We have an option to combine all the docs using pdftools.
 
-Yeah that could be fun. But it falls down if we need to replace two items, like #NAME# and
-#INSTITUTE#. Then we'd need to load two columns from the file and replace them in lock step.
+So this is great if you want to make a bunch of name badges, where you can fit maybe 8 badges
+onto one sheet. If you provide 27 names then you will get four pages of output, where the last
+page contains just the three final badges.
 
-Maybe NAME="@[0]foo.csv" INSTITUTE="@[1]foo.csv", or we could even imply that if the same file is
-referenced twice we are reading columns from it. But this starts to get complex to code. So yeah.
+I also made it work if we need to replace two items, like #NAME# and
+#INSTITUTE#. In this case we need to load two columns from the file and replace them in lock step,
+so that everyone's badge lists their correct institute. The way I implemented this is that you
+need to have the items in a TSV file and if you reference the file twice then the second reference
+will load the second column (and the third will load a third). I really need to add some better
+docs/examples but I promise that it does work!
 
-See (making_labels.md)[making_labels.md].
+See [making_labels.md](making_labels.md) for random thoughts.
 
 ## Original notes and approaches
 

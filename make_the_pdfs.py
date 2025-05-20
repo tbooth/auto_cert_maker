@@ -90,7 +90,7 @@ def myformat(template, adict):
 
 def shellize(insane):
     """Sanitizes a non-sane string so it can be a filename.
-       Apparently Aspera can't deal with '+' in filenames.
+       Stolen from EdGen data delivery code.
     """
     allowed_chars = string.ascii_letters + string.digits + "_-"
 
