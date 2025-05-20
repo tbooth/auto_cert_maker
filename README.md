@@ -46,7 +46,15 @@ I also made it work if we need to replace two items, like #NAME# and
 so that everyone's badge lists their correct institute. The way I implemented this is that you
 need to have the items in a TSV file and if you reference the file twice then the second reference
 will load the second column (and the third will load a third). I really need to add some better
-docs/examples but I promise that it does work!
+docs/examples but I promise that it does work! Try this, using the provided example files:
+
+```
+$ make_the_pdfs.py -c combined.pdf -t templates/name_mail.odt FOO="The Big Event" \
+        FOO="The Huge Event" NAME=@test/alist.tsv MAIL=@test/alist.tsv
+```
+
+You should get a 2-page PDF in combined.pdf - one page per event since the list of users is
+smaller than the number of slots on the template.
 
 See [making_labels.md](making_labels.md) for random thoughts.
 
