@@ -1,4 +1,5 @@
 .~lock.*
 /attendees/
 /certs_*/
+/*_out/
 __pycache__/
